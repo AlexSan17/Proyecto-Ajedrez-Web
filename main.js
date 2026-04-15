@@ -20,8 +20,8 @@ const PIECE_TYPES = {
 };
 
 // Sonidos
-const moveSound = new Audio('/assets/move.ogg');
-const captureSound = new Audio('/assets/capture.ogg');
+const moveSound = new Audio('./assets/move.ogg');
+const captureSound = new Audio('./assets/capture.ogg');
 
 // Estado Global
 let state = {
@@ -330,7 +330,7 @@ function renderBoard() {
         const pieceEl = document.createElement('div');
         pieceEl.className = 'piece';
         const img = p.color === WHITE ? PIECE_TYPES[p.type].w : PIECE_TYPES[p.type].b;
-        pieceEl.style.backgroundImage = `url('/assets/${img}')`;
+        pieceEl.style.backgroundImage = `url('./assets/${img}?v=2')`;
         
         if (state.lastMove && state.lastMove.to.r === r && state.lastMove.to.c === c) {
             pieceEl.classList.add('dropped');

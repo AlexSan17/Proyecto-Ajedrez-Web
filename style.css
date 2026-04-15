@@ -128,6 +128,21 @@ body {
 }
 
 /* Layout y Tutorial */
+.header-center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.game-subtitle-mini {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin: 0;
+}
+
 .game-layout {
   display: flex;
   flex-direction: row;

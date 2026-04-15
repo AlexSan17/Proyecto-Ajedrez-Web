@@ -33,7 +33,8 @@ let state = {
   lastMove: null,
   layout: 'classic',
   tutorialPhase: 0,
-  tutorialMoves: 0
+  tutorialMoves: 0,
+  aiDifficulty: null
 };
 
 const TUTORIAL_PHASES = [
@@ -134,7 +135,7 @@ function initBoard(layoutType) {
 }
 
 // Validación Abstracta
-function es_movimiento_valido(b, orig_r, orig_c, dest_r, dest_c, color, moved) {
+function es_movimiento_valido(b, orig_r, orig_c, dest_r, dest_c, color, moved, lm) {
   if (dest_r < 0 || dest_r > 7 || dest_c < 0 || dest_c > 7) return false;
   const target = b[dest_r][dest_c];
   if (target && target.color === color) return false;
@@ -154,9 +155,10 @@ function es_movimiento_valido(b, orig_r, orig_c, dest_r, dest_c, color, moved) {
       if (dif_c === 1 && dest_r === orig_r + dir && target && target.color !== color) return true;
       // Captura al paso (En Passant)
       if (dif_c === 1 && dest_r === orig_r + dir && !target) {
-          if (state.lastMove && state.lastMove.piece.type === 'P' && state.lastMove.piece.color !== color) {
-              if (state.lastMove.to.r === orig_r && state.lastMove.to.c === dest_c) {
-                  if (Math.abs(state.lastMove.from.r - state.lastMove.to.r) === 2) {
+          const _lm = (lm !== undefined) ? lm : state.lastMove;
+          if (_lm && _lm.piece.type === 'P' && _lm.piece.color !== color) {
+              if (_lm.to.r === orig_r && _lm.to.c === dest_c) {
+                  if (Math.abs(_lm.from.r - _lm.to.r) === 2) {
                       return true;
                   }
               }
@@ -219,11 +221,11 @@ function isBlocked(b, r1, c1, r2, c2) {
 
 function isKingInCheck(b, color) {
   let kr = -1, kc = -1;
-  // Encontrar rey
-  for (let r=0; r<8; r++) {
+  // Encontrar rey (con break correcto del doble bucle)
+  outer: for (let r=0; r<8; r++) {
     for (let c=0; c<8; c++) {
         if (b[r][c] && b[r][c].type === 'K' && b[r][c].color === color) {
-            kr = r; kc = c; break;
+            kr = r; kc = c; break outer;
         }
     }
   }
@@ -351,22 +353,37 @@ function updateTurnUI() {
 }
 
 function gameOver(title, sub) {
+    state.status = GAME_MATE;
     document.getElementById('game-over-title').innerText = title;
     document.getElementById('game-over-subtitle').innerText = sub;
     modalEl.classList.remove('hidden');
 }
 
 function checkGameState() {
-    if (state.layout === 'tutorial') return; // En tutorial se verifica en finalizeMove
-    
+    if (state.layout === 'tutorial') return;
     const check = isKingInCheck(state.board, state.turn);
     const moves = hasAnyValidMove(state.turn);
-    
     if (!moves) {
         if (check) {
-            gameOver("¡JAQUE MATE!", state.turn === WHITE ? "Ganan las Negras" : "Ganan las Blancas");
+            if (state.layout === 'ai') {
+                if (state.turn === BLACK) {
+                    // Jugador hizo jaque mate a la IA!
+                    markAICleared(state.aiDifficulty);
+                    const idx = DIFF_ORDER.indexOf(state.aiDifficulty);
+                    const hasNext = idx >= 0 && idx < DIFF_ORDER.length - 1;
+                    const unlockMsg = hasNext
+                        ? `¡Desbloqueaste: ${DIFF_NAMES[DIFF_ORDER[idx + 1]]}!`
+                        : '¡Dominaste todas las dificultades!';
+                    gameOver('¡GANASTE!', unlockMsg);
+                } else {
+                    // La IA hizo jaque mate al jugador
+                    gameOver('¡JAQUE MATE!', 'La IA te venció. ¡Inténtalo de nuevo!');
+                }
+            } else {
+                gameOver('¡JAQUE MATE!', state.turn === WHITE ? 'Ganan las Negras' : 'Ganan las Blancas');
+            }
         } else {
-            gameOver("TABLAS", "(Ahogado)");
+            gameOver('TABLAS', '(Ahogado)');
         }
     }
 }
@@ -374,6 +391,7 @@ function checkGameState() {
 // Interacción
 function handleCellClick(r, c) {
   if (state.status !== GAME_PLAYING) return;
+  if (state.layout === 'ai' && state.turn === BLACK) return; // La IA está pensando
   
   const piece = state.board[r][c];
   
@@ -490,8 +508,22 @@ function finalizeMove(fromR, fromC, toR, toC, piece) {
                     };
                 }
             } else if (state.tutorialPhase === TUTORIAL_PHASES.length - 1 && state.tutorialMoves >= 2) {
-                alert("Uy... No lograste el Jaque Mate en 2 movimientos. ¡Inténtalo de nuevo!");
-                loadTutorialPhaseUI();
+                // Mostrar modal de fallo y reiniciar la fase
+                const phaseModal = document.getElementById('phase-modal');
+                const phaseTitle = phaseModal.querySelector('h2');
+                const originalText = phaseTitle.innerText;
+                const originalColor = phaseTitle.style.color;
+                phaseTitle.innerText = '¡Inténtalo de nuevo!';
+                phaseTitle.style.color = '#f87171';
+                phaseTitle.style.textShadow = '0 0 15px rgba(248, 113, 113, 0.5)';
+                phaseModal.classList.remove('hidden');
+                setTimeout(() => {
+                    phaseModal.classList.add('hidden');
+                    phaseTitle.innerText = originalText;
+                    phaseTitle.style.color = originalColor;
+                    phaseTitle.style.textShadow = '';
+                    loadTutorialPhaseUI();
+                }, 1800);
             }
         }, 50);
         return;
@@ -502,14 +534,21 @@ function finalizeMove(fromR, fromC, toR, toC, piece) {
     updateTurnUI();
     renderBoard();
     
-    // Usar micro task para darle tiempo al DOM a renderizar la ficha antes del alert
-    setTimeout(checkGameState, 50);
+    // Usar micro task para darle tiempo al DOM a renderizar la ficha
+    setTimeout(() => {
+        checkGameState();
+        // En modo IA, disparar movimiento si el juego continúa y es turno de la IA
+        if (state.layout === 'ai' && state.turn === BLACK && state.status === GAME_PLAYING) {
+            triggerAIMove();
+        }
+    }, 50);
 }
 
 // Iniciar Partida
-function startGame(layoutType = 'classic') {
+function startGame(layoutType = 'classic', aiDifficulty = null) {
+    cancelAIMove();
     state = {
-        board: initBoard(layoutType),
+        board: initBoard(layoutType === 'ai' ? 'classic' : layoutType),
         turn: WHITE,
         status: GAME_PLAYING,
         selected: null,
@@ -517,17 +556,24 @@ function startGame(layoutType = 'classic') {
         lastMove: null,
         layout: layoutType,
         tutorialPhase: 0,
-        tutorialMoves: 0
+        tutorialMoves: 0,
+        aiDifficulty: aiDifficulty
     };
-    
     const sidebar = document.getElementById('tutorial-sidebar');
+    const subtitleEl = document.getElementById('game-subtitle-header');
     modalEl.classList.add('hidden');
-    
     if (layoutType === 'tutorial') {
         sidebar.classList.remove('d-none');
+        subtitleEl.innerText = 'Táctica y Estrategia';
         loadTutorialPhaseUI();
+    } else if (layoutType === 'ai') {
+        sidebar.classList.add('d-none');
+        subtitleEl.innerText = `VS IA · ${DIFF_NAMES[aiDifficulty]}`;
+        updateTurnUI();
+        renderBoard();
     } else {
         sidebar.classList.add('d-none');
+        subtitleEl.innerText = 'Táctica y Estrategia';
         updateTurnUI();
         renderBoard();
     }
@@ -550,16 +596,26 @@ document.getElementById('btn-play-tutorial').addEventListener('click', () => {
 });
 
 document.getElementById('btn-exit-app').addEventListener('click', () => {
-    alert("Juego cerrado. ¡Regresa pronto!");
+    // En web no se puede cerrar la pestaña, mostramos feedback visual temporal
+    const btn = document.getElementById('btn-exit-app');
+    const original = btn.innerText;
+    btn.innerText = '¡Hasta pronto!';
+    btn.disabled = true;
+    setTimeout(() => {
+        btn.innerText = original;
+        btn.disabled = false;
+    }, 1500);
 });
 
-document.getElementById('btn-restart').addEventListener('click', () => startGame(state.layout || 'classic'));
+document.getElementById('btn-restart').addEventListener('click', () => startGame(state.layout || 'classic', state.aiDifficulty));
 document.getElementById('btn-salir').addEventListener('click', () => {
+    cancelAIMove();
     gameContainerEl.classList.add('d-none');
     mainMenuEl.classList.remove('d-none');
     modalEl.classList.add('hidden');
 });
 document.getElementById('btn-menu').addEventListener('click', () => {
+    cancelAIMove();
     gameContainerEl.classList.add('d-none');
     mainMenuEl.classList.remove('d-none');
 });
@@ -666,3 +722,280 @@ if(btnMusic) btnMusic.addEventListener('click', toggleMusic);
 if(btnMusicMenu) btnMusicMenu.addEventListener('click', toggleMusic);
 
 // Boot no inicia startGame() porque mostramos el menú inicialmente.
+
+// ==================== MOTOR IA ====================
+
+const DIFF_NAMES  = { facil: 'FÁCIL', normal: 'NORMAL', dificil: 'DIFÍCIL' };
+const DIFF_ORDER  = ['facil', 'normal', 'dificil'];
+
+// Valores de material
+const PIECE_VALUES = { P: 100, N: 320, B: 330, R: 500, Q: 900, K: 20000 };
+
+// Tablas posicionales (perspectiva blancas: fila 0 = rango 8, fila 7 = rango 1)
+const POS_TABLES = {
+  P: [
+     0,  0,  0,  0,  0,  0,  0,  0,
+    50, 50, 50, 50, 50, 50, 50, 50,
+    10, 10, 20, 30, 30, 20, 10, 10,
+     5,  5, 10, 25, 25, 10,  5,  5,
+     0,  0,  0, 20, 20,  0,  0,  0,
+     5, -5,-10,  0,  0,-10, -5,  5,
+     5, 10, 10,-20,-20, 10, 10,  5,
+     0,  0,  0,  0,  0,  0,  0,  0
+  ],
+  N: [
+    -50,-40,-30,-30,-30,-30,-40,-50,
+    -40,-20,  0,  0,  0,  0,-20,-40,
+    -30,  0, 10, 15, 15, 10,  0,-30,
+    -30,  5, 15, 20, 20, 15,  5,-30,
+    -30,  0, 15, 20, 20, 15,  0,-30,
+    -30,  5, 10, 15, 15, 10,  5,-30,
+    -40,-20,  0,  5,  5,  0,-20,-40,
+    -50,-40,-30,-30,-30,-30,-40,-50
+  ],
+  B: [
+    -20,-10,-10,-10,-10,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5, 10, 10,  5,  0,-10,
+    -10,  5,  5, 10, 10,  5,  5,-10,
+    -10,  0, 10, 10, 10, 10,  0,-10,
+    -10, 10, 10, 10, 10, 10, 10,-10,
+    -10,  5,  0,  0,  0,  0,  5,-10,
+    -20,-10,-10,-10,-10,-10,-10,-20
+  ],
+  R: [
+     0,  0,  0,  0,  0,  0,  0,  0,
+     5, 10, 10, 10, 10, 10, 10,  5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+    -5,  0,  0,  0,  0,  0,  0, -5,
+     0,  0,  0,  5,  5,  0,  0,  0
+  ],
+  Q: [
+    -20,-10,-10, -5, -5,-10,-10,-20,
+    -10,  0,  0,  0,  0,  0,  0,-10,
+    -10,  0,  5,  5,  5,  5,  0,-10,
+     -5,  0,  5,  5,  5,  5,  0, -5,
+      0,  0,  5,  5,  5,  5,  0, -5,
+    -10,  5,  5,  5,  5,  5,  0,-10,
+    -10,  0,  5,  0,  0,  0,  0,-10,
+    -20,-10,-10, -5, -5,-10,-10,-20
+  ],
+  K: [
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -30,-40,-40,-50,-50,-40,-40,-30,
+    -20,-30,-30,-40,-40,-30,-30,-20,
+    -10,-20,-20,-20,-20,-20,-20,-10,
+     20, 20,  0,  0,  0,  0, 20, 20,
+     20, 30, 10,  0,  0, 10, 30, 20
+  ]
+};
+
+function getPosBonus(piece, r, c) {
+    const table = POS_TABLES[piece.type];
+    if (!table) return 0;
+    // Blancas: tabla normal; Negras: espejo vertical
+    const idx = piece.color === WHITE ? r * 8 + c : (7 - r) * 8 + c;
+    return table[idx];
+}
+
+function evaluateBoard(board) {
+    let score = 0;
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const p = board[r][c];
+            if (!p) continue;
+            const val = PIECE_VALUES[p.type] + getPosBonus(p, r, c);
+            // Score positivo = bueno para las Negras (IA)
+            score += p.color === BLACK ? val : -val;
+        }
+    }
+    return score;
+}
+
+// Genera todos los movimientos legales para un color sobre un tablero dado
+function getAIMovesForBoard(board, color) {
+    const moves = [];
+    for (let r = 0; r < 8; r++) {
+        for (let c = 0; c < 8; c++) {
+            const piece = board[r][c];
+            if (!piece || piece.color !== color) continue;
+            for (let tr = 0; tr < 8; tr++) {
+                for (let tc = 0; tc < 8; tc++) {
+                    if (tr === r && tc === c) continue;
+                    if (es_movimiento_valido(board, r, c, tr, tc, piece.color, piece.moved, null)) {
+                        const copy = board.map(row => [...row]);
+                        copy[tr][tc] = copy[r][c];
+                        copy[r][c] = null;
+                        if (!isKingInCheck(copy, color)) {
+                            moves.push({ fromR: r, fromC: c, toR: tr, toC: tc });
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return moves;
+}
+
+// Aplica un movimiento sobre una copia del tablero (la IA siempre promueve a reina)
+function applyMoveToBoard(board, fromR, fromC, toR, toC) {
+    const newBoard = board.map(row => [...row]);
+    const piece = { ...newBoard[fromR][fromC], moved: true };
+    if (piece.type === 'P' && (toR === 0 || toR === 7)) piece.type = 'Q';
+    newBoard[toR][toC] = piece;
+    newBoard[fromR][fromC] = null;
+    return newBoard;
+}
+
+// Minimax con poda Alpha-Beta
+function minimax(board, depth, alpha, beta, isMaximizing) {
+    if (depth === 0) return evaluateBoard(board);
+    const color = isMaximizing ? BLACK : WHITE;
+    const moves = getAIMovesForBoard(board, color);
+    if (moves.length === 0) {
+        if (isKingInCheck(board, color)) {
+            // Jaque mate - preferíndo mates más rápidos
+            return isMaximizing ? -50000 - depth : 50000 + depth;
+        }
+        return 0; // Ahogado
+    }
+    if (isMaximizing) {
+        let maxEval = -Infinity;
+        for (const move of moves) {
+            const newBoard = applyMoveToBoard(board, move.fromR, move.fromC, move.toR, move.toC);
+            const eval_ = minimax(newBoard, depth - 1, alpha, beta, false);
+            maxEval = Math.max(maxEval, eval_);
+            alpha = Math.max(alpha, eval_);
+            if (beta <= alpha) break; // Poda Beta
+        }
+        return maxEval;
+    } else {
+        let minEval = Infinity;
+        for (const move of moves) {
+            const newBoard = applyMoveToBoard(board, move.fromR, move.fromC, move.toR, move.toC);
+            const eval_ = minimax(newBoard, depth - 1, alpha, beta, true);
+            minEval = Math.min(minEval, eval_);
+            beta = Math.min(beta, eval_);
+            if (beta <= alpha) break; // Poda Alpha
+        }
+        return minEval;
+    }
+}
+
+// Obtiene el mejor movimiento según la dificultad
+function getBestMove() {
+    const diff  = state.aiDifficulty;
+    const moves = getAIMovesForBoard(state.board, BLACK);
+    if (moves.length === 0) return null;
+    let depth, randomChance;
+    if      (diff === 'facil')   { depth = 1; randomChance = 0.45; }
+    else if (diff === 'normal')  { depth = 2; randomChance = 0.10; }
+    else                         { depth = 3; randomChance = 0.00; }
+    // Chance de mover al azar (da variedad en dificultad fácil)
+    if (Math.random() < randomChance) {
+        return moves[Math.floor(Math.random() * moves.length)];
+    }
+    // Mezclar para variedad en empates de puntuación
+    moves.sort(() => Math.random() - 0.5);
+    let bestMove  = null;
+    let bestScore = -Infinity;
+    for (const move of moves) {
+        const newBoard = applyMoveToBoard(state.board, move.fromR, move.fromC, move.toR, move.toC);
+        const score    = minimax(newBoard, depth - 1, -Infinity, Infinity, false);
+        if (score > bestScore) { bestScore = score; bestMove = move; }
+    }
+    return bestMove;
+}
+
+const aiThinkingEl = document.getElementById('ai-thinking');
+let aiMoveTimeout  = null;
+
+function cancelAIMove() {
+    if (aiMoveTimeout !== null) {
+        clearTimeout(aiMoveTimeout);
+        aiMoveTimeout = null;
+        if (aiThinkingEl) aiThinkingEl.classList.add('d-none');
+    }
+}
+
+function triggerAIMove() {
+    if (aiThinkingEl) aiThinkingEl.classList.remove('d-none');
+    const thinkMs = state.aiDifficulty === 'facil' ? 500
+                  : state.aiDifficulty === 'normal' ? 800 : 1100;
+    aiMoveTimeout = setTimeout(() => {
+        aiMoveTimeout = null;
+        if (aiThinkingEl) aiThinkingEl.classList.add('d-none');
+        if (state.status !== GAME_PLAYING) return;
+        const move = getBestMove();
+        if (!move) { checkGameState(); return; }
+        const piece = state.board[move.fromR][move.fromC];
+        finalizeMove(move.fromR, move.fromC, move.toR, move.toC, piece);
+    }, thinkMs);
+}
+
+// ==================== SISTEMA DE DESBLOQUEO ====================
+
+function getAICleared()  { return JSON.parse(localStorage.getItem('chess_ai_cleared')  || '[]');         }
+function getAIUnlocked() { return JSON.parse(localStorage.getItem('chess_ai_unlocked') || '["facil"]'); }
+
+function markAICleared(diff) {
+    const cleared  = getAICleared();
+    if (!cleared.includes(diff)) {
+        cleared.push(diff);
+        localStorage.setItem('chess_ai_cleared', JSON.stringify(cleared));
+    }
+    const unlocked = getAIUnlocked();
+    const idx = DIFF_ORDER.indexOf(diff);
+    if (idx >= 0 && idx < DIFF_ORDER.length - 1) {
+        const next = DIFF_ORDER[idx + 1];
+        if (!unlocked.includes(next)) {
+            unlocked.push(next);
+            localStorage.setItem('chess_ai_unlocked', JSON.stringify(unlocked));
+        }
+    }
+}
+
+function updateDifficultyModal() {
+    const unlocked = getAIUnlocked();
+    const cleared  = getAICleared();
+    DIFF_ORDER.forEach(diff => {
+        const btn    = document.getElementById(`btn-diff-${diff}`);
+        const card   = document.getElementById(`diff-card-${diff}`);
+        const starsEl= document.getElementById(`diff-stars-${diff}`);
+        if (!btn || !card) return;
+        if (unlocked.includes(diff)) {
+            btn.disabled = false;
+            btn.innerText = 'JUGAR';
+            card.classList.remove('locked');
+        } else {
+            btn.disabled = true;
+            btn.innerText = '🔒';
+            card.classList.add('locked');
+        }
+        if (starsEl) starsEl.innerText = cleared.includes(diff) ? '⭐' : '';
+    });
+}
+
+// Listeners del modal de dificultad
+document.getElementById('btn-play-ai').addEventListener('click', () => {
+    updateDifficultyModal();
+    document.getElementById('ai-difficulty-modal').classList.remove('hidden');
+});
+
+document.getElementById('btn-close-diff-modal').addEventListener('click', () => {
+    document.getElementById('ai-difficulty-modal').classList.add('hidden');
+});
+
+DIFF_ORDER.forEach(diff => {
+    document.getElementById(`btn-diff-${diff}`).addEventListener('click', () => {
+        document.getElementById('ai-difficulty-modal').classList.add('hidden');
+        mainMenuEl.classList.add('d-none');
+        gameContainerEl.classList.remove('d-none');
+        startGame('ai', diff);
+    });
+});

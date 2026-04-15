@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Proyecto Ajedrez Web Moderno" />
+    <title>Ajedrez Táctica y Estrategia</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <script type="module" crossorigin src="/Proyecto-Ajedrez-Web/assets/index-rXI5BvVO.js"></script>
+    <link rel="stylesheet" crossorigin href="/Proyecto-Ajedrez-Web/assets/index-DRXNWNDG.css">
+  </head>
+  <body>
+    <div id="main-menu" class="menu-container glass-panel">
+      <h1 class="game-title">AJEDREZ</h1>
+      <p class="game-subtitle">Táctica y Estrategia</p>
+      <div class="menu-buttons">
+        <button id="btn-play-classic" class="btn glass-btn glass-btn-accent">JUGAR PARTIDA CLÁSICA</button>
+        <button id="btn-play-tutorial" class="btn glass-btn">TUTORIAL</button>
+        <button id="btn-music-menu" class="btn glass-btn">🎵 MÚSICA OFF</button>
+        <button id="btn-exit-app" class="btn glass-btn glass-btn-red">SALIR</button>
+      </div>
+
+      <div class="theme-selector" style="margin-top: 1rem; color: var(--text-secondary); width: 100%; max-width: 350px;">
+        <p style="margin-bottom: 0.75rem; text-transform: uppercase; font-size: 0.9rem; letter-spacing: 0.05em;">Mapa actual: <span id="current-theme-name" style="color: var(--text-primary); font-weight: bold;">Clásico</span></p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+           <button class="btn glass-btn" style="padding: 0.5rem; font-size: 0.8rem; letter-spacing: 0.02em;" id="btn-theme-classic">Clásico</button>
+           <button class="btn glass-btn" style="padding: 0.5rem; font-size: 0.8rem; letter-spacing: 0.02em;" id="btn-theme-celeste">Celeste</button>
+           <button class="btn glass-btn" style="padding: 0.5rem; font-size: 0.8rem; letter-spacing: 0.02em;" id="btn-theme-madera">Madera</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="game-container" class="d-none">
+      <header class="game-header">
+        <button id="btn-menu" class="btn glass-btn">MENU</button>
+        <button id="btn-music" class="btn glass-btn" style="padding: 0.5rem;">🎵 OFF</button>
+        <div id="turno-indicador" class="turno-box">
+          <h2>Turno: Blancas</h2>
+        </div>
+        <button id="btn-salir" class="btn glass-btn glass-btn-red">SALIR</button>
+      </header>
+
+      <div class="game-layout">
+        <!-- Panel lateral del Tutorial -->
+        <aside id="tutorial-sidebar" class="glass-panel tutorial-sidebar d-none">
+          <h2 id="tutorial-title" style="margin-bottom: 1rem;">📚 Tutorial</h2>
+          <div class="tutorial-card">
+            <h3 id="tutorial-desc-title"></h3>
+            <p id="tutorial-desc-text"></p>
+          </div>
+          <p id="tutorial-goal" class="tutorial-goal" style="margin-top: 1rem;"></p>
+        </aside>
+
+        <main class="board-container">
+          <!-- Generado dinámicamente -->
+          <div id="chessboard" class="chessboard glass-panel"></div>
+        </main>
+      </div>
+      
+      <!-- Modal para fin de juego -->
+      <div id="game-over-modal" class="modal hidden">
+        <div class="modal-content glass-panel">
+          <h1 id="game-over-title">¡JAQUE MATE!</h1>
+          <p id="game-over-subtitle">Ganan las Blancas</p>
+          <button id="btn-restart" class="btn glass-btn">JUGAR DE NUEVO</button>
+        </div>
+      </div>
+
+      <!-- Modal para coronación -->
+      <div id="promotion-modal" class="modal hidden">
+        <div class="modal-content glass-panel" style="padding: 2rem;">
+          <h2 style="margin-bottom: 1.5rem; font-size: 2rem;">Elige tu promoción</h2>
+          <div id="promotion-options" style="display: flex; gap: 1rem; justify-content: center;">
+            <button class="btn glass-btn" data-piece="Q">Reina</button>
+            <button class="btn glass-btn" data-piece="R">Torre</button>
+            <button class="btn glass-btn" data-piece="B">Alfil</button>
+            <button class="btn glass-btn" data-piece="N">Caballo</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modal para fase superada -->
+      <div id="phase-modal" class="modal hidden">
+        <div class="modal-content glass-panel" style="padding: 2.5rem;">
+          <h2 style="margin-bottom: 0; font-size: 2.5rem; color: #4ade80; text-shadow: 0 0 15px rgba(74, 222, 128, 0.5);">¡Fase Superada!</h2>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

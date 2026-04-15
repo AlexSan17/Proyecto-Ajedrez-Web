@@ -214,8 +214,8 @@ body {
   grid-template-rows: repeat(8, 1fr);
   width: 100%;
   max-width: min(90vw, 75vh);
+  height: min(90vw, 75vh);
   aspect-ratio: 1 / 1;
-  height: auto;
   margin: 0 auto;
   border: 8px solid #222;
   box-shadow: 8px 8px 0px rgba(0,0,0,0.5);
@@ -475,6 +475,7 @@ body {
   }
   .chessboard {
     max-width: 95vw;
+    height: 95vw;
     border-width: 4px;
     box-shadow: 4px 4px 0px rgba(0,0,0,0.5);
   }

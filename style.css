@@ -289,6 +289,16 @@ body {
   z-index: 5;
 }
 
+.cell.valid-castle::before {
+  content: '';
+  position: absolute;
+  width: 25%;
+  height: 25%;
+  border-radius: 50%;
+  background-color: rgba(234, 179, 8, 0.9) !important;
+  z-index: 5 !important;
+}
+
 .cell.king-in-check {
   box-shadow: inset 0 0 20px var(--accent-red);
   background-color: rgba(225, 29, 72, 0.2) !important;

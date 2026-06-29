@@ -264,7 +264,8 @@ function generateValidMoves(r, c, ignoreTurn = false) {
         }
         
         if (!isKingInCheck(b_copy, piece.color)) {
-          moves.push({r: tr, c: tc});
+          const isCastle = piece.type === 'K' && Math.abs(tc - c) === 2;
+          moves.push({r: tr, c: tc, isCastle});
         }
       }
     }
@@ -303,8 +304,12 @@ function renderBoard() {
     }
   }
   
-  for (let r = 0; r < ROWS; r++) {
-    for (let c = 0; c < COLS; c++) {
+  const isFlipped = state.layout === 'classic' && state.turn === BLACK;
+  
+  for (let visualR = 0; visualR < ROWS; visualR++) {
+    for (let visualC = 0; visualC < COLS; visualC++) {
+      const r = isFlipped ? 7 - visualR : visualR;
+      const c = isFlipped ? 7 - visualC : visualC;
       const cell = document.createElement('div');
       cell.className = `cell ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
       cell.dataset.r = r;
@@ -321,9 +326,16 @@ function renderBoard() {
       }
       
       // Valid move highlighting
-      const isValid = state.validMoves.find(m => m.r === r && m.c === c);
-      if (isValid) {
-        cell.classList.add(state.board[r][c] ? 'valid-capture' : 'valid-move');
+      const validMove = state.validMoves.find(m => m.r === r && m.c === c);
+      if (validMove) {
+        const selectedPiece = state.selected ? state.board[state.selected.r][state.selected.c] : null;
+        const isActuallyCastle = selectedPiece && selectedPiece.type === 'K' && Math.abs(c - state.selected.c) === 2;
+        
+        if (validMove.isCastle || isActuallyCastle) {
+            cell.classList.add('valid-castle');
+        } else {
+            cell.classList.add(state.board[r][c] ? 'valid-capture' : 'valid-move');
+        }
       }
 
       // Render Piece
@@ -437,6 +449,11 @@ function executeMove(fromR, fromC, toR, toC) {
 }
 
 function finalizeMove(fromR, fromC, toR, toC, piece) {
+    fromR = parseInt(fromR);
+    fromC = parseInt(fromC);
+    toR = parseInt(toR);
+    toC = parseInt(toC);
+
     // Enroque execution
     if (piece.type === 'K' && Math.abs(toC - fromC) === 2) {
         const dir_c = Math.sign(toC - fromC);
@@ -444,9 +461,11 @@ function finalizeMove(fromR, fromC, toR, toC, piece) {
         const rook_dest_c = toC - dir_c;
         const rook = state.board[fromR][rook_c];
         
-        state.board[fromR][rook_dest_c] = rook;
-        state.board[fromR][rook_c] = null;
-        rook.moved = true;
+        if (rook && rook.type === 'R') {
+            state.board[fromR][rook_dest_c] = rook;
+            state.board[fromR][rook_c] = null;
+            rook.moved = true;
+        }
     }
     
     let isCapture = false;
